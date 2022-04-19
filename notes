@@ -1,0 +1,51 @@
+An ideal cpu can be broken down into 3 parts
+
+1: Memory
+2: Control Unit
+3: Arithmetic Logic Unit
+
+Each of these 3 parts can be broken down into smaller units: memory can be
+broken down into main-memory and registers, the Control Unit can be broken down
+into decode-fetch-execute and the ALU can be broken down into arithmetic,
+logical and comparison circuits.
+
+Along with each of these components we'll also write an assembler and some test
+programs.
+
+
+Note on RISC-V ISA:
+The immediate variants of riscv instructions allow performing an operation
+between a register and a constant instead of 2 registers, e.g. `addi x2 x3 -10`
+as opposed to a normal `add x2 x3 x4`.
+
+
+Endiannes refers to the address of the most and least significant bytes of a word.
+A big-endian system stores the most significant byte of a word at the smallest
+memory address and the least significant byte at the largest. A little-endian
+system stores the least-significant byte at the smallest address.
+
+
+
+# Opcode
+OP
+IMM
+JUMP
+BRANCH
+LOAD
+STORE
+
+# Funct
+ADD
+SUB
+MUL
+DIV
+AND
+OR
+XOR
+NOT
+EQ
+NE
+LT
+GT
+LTEQ
+GTEQ
