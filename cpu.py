@@ -4,7 +4,7 @@ from sys import argv, stderr
 from enum import Enum
 
 class Op(Enum):
-    SYS     = 0b000
+    CTL     = 0b000
     ALUR	= 0b001 # register-register ALU operation
     ALUI	= 0b010 # register-immediate ALU operation
     JUMP	= 0b011
@@ -13,7 +13,7 @@ class Op(Enum):
 
 
 class Fn(Enum):
-    # SYS
+    # CTL
     NOP         = 0b000
     HALT        = 0b001
     IN          = 0b010
@@ -106,10 +106,6 @@ def cond(fn, x, y):
     return ret
 
 def mem(fn, x, y):
-    if fn == Fn.LOAD:
-        regfile[x] = memory[regfile[y]]
-    elif fn == Fn.STORE:
-        memory[regfile[x]] = regfile[y]
 
 def field(i, s, e): # get field of inst between s and e
     return (i >> e) & ((1 << (s - e + 1)) - 1)
@@ -137,7 +133,8 @@ def step():
     imm_b2 = sext(field(inst, 6, 0))
 
     # execute
-    if op == Op.SYS:
+    #stat = False if op == Op.CTL and fn == Fn.HALT else True
+    if op == Op.CTL:
         stat = ctl(fn, r_a)
     elif op == Op.ALUR:
         regfile[r_a] = alu(fn, regfile[r_b], regfile[r_c])
@@ -145,11 +142,14 @@ def step():
         regfile[r_a] = alu(fn, regfile[r_b], imm_i)
     elif op == Op.JUMP:
         regfile[r_a] = regfile[pc]
-        regfile[pc] = regfile[r_b] if fn == Fn.ABS else (regfile[pc] + imm_i * 4)
+        regfile[pc] = regfile[r_b] if fn == Fn.ABS else (regfile[pc] + imm_i)
     elif op == Op.BRANCH:
-        regfile[pc] += 4 * (imm_b1 if cond(fn, regfile[r_a], regfile[r_b]) else imm_b2)
+        regfile[pc] += imm_b1 if cond(fn, regfile[r_a], regfile[r_b]) else imm_b2
     elif op == Op.MEM:
-        mem(fn, r_a, r_b)
+        if fn == Fn.LOAD:
+            regfile[r_a] = memory[regfile[r_b]]
+        elif fn == Fn.STORE:
+            memory[regfile[r_a]] = regfile[r_b]
 
     # write
     # not really a stage yet, will be done after pipeline refactor
