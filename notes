@@ -25,27 +25,23 @@ memory address and the least significant byte at the largest. A little-endian
 system stores the least-significant byte at the smallest address.
 
 
+### INSTRUCTION LAYOUTS ###
 
-# Opcode
-OP
-IMM
-JUMP
-BRANCH
-LOAD
-STORE
+Instructions are big-endian.
+There are 4 types of instructions (bit ranges are inclusive):
 
-# Funct
-ADD
-SUB
-MUL
-DIV
-AND
-OR
-XOR
-NOT
-EQ
-NE
-LT
-GT
-LTEQ
-GTEQ
+S-type
+31   29  28    24  23    19  18                                             0
+[op   ]  [fn    ]  [r_a   ]  [imm_s                                         ]
+
+R-type
+31   29  28    24  23    19  18    14  13     9  8                          0
+[op   ]  [fn    ]  [r_a   ]  [r_b    ]  [r_c    ]  [empty                     ]
+
+I-type
+31   29  28    24  23    19  18    14  13                                   0
+[op   ]  [fn    ]  [r_a   ]  [r_b    ]  [imm_i                               ]
+
+B-type
+31   29  28    24  23    19  18    14  13               7  6                0
+[op   ]  [fn    ]  [r_a   ]  [r_b    ]  [imm_b1          ]  [imm_b2          ]
