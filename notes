@@ -28,20 +28,16 @@ system stores the least-significant byte at the smallest address.
 ### INSTRUCTION LAYOUTS ###
 
 Instructions are big-endian.
-There are 4 types of instructions (bit ranges are inclusive):
+There are 3 types of instructions (bit ranges are inclusive):
 
-S-type
-31   29  28    24  23    19  18                                             0
-[op   ]  [fn    ]  [r_a   ]  [imm_s                                         ]
+S-type (CTL and IO)
+31   29  28    26  25    21  20                                              0
+[op   ]  [fn    ]  [r_a   ]  [imm_s                                          ]
 
-R-type
-31   29  28    24  23    19  18    14  13     9  8                          0
-[op   ]  [fn    ]  [r_a   ]  [r_b    ]  [r_c    ]  [empty                     ]
+R-type (ALUR)
+31   29  28    26  25    21  20     16  15     11  10                        0
+[op   ]  [fn    ]  [r_a   ]  [r_b    ]  [r_c    ]  [empty                    ]
 
-I-type
-31   29  28    24  23    19  18    14  13                                   0
+I-type (ALUI, JUMP, BRANCH and MEM)
+31   29  28    26  25    21  20     16  15                                   0
 [op   ]  [fn    ]  [r_a   ]  [r_b    ]  [imm_i                               ]
-
-B-type
-31   29  28    24  23    19  18    14  13               7  6                0
-[op   ]  [fn    ]  [r_a   ]  [r_b    ]  [imm_b1          ]  [imm_b2          ]

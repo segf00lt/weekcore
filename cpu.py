@@ -5,19 +5,22 @@ from enum import Enum
 
 class Op(Enum):
     CTL     = 0b000
-    ALUR	= 0b001 # register-register ALU operation
-    ALUI	= 0b010 # register-immediate ALU operation
-    JUMP	= 0b011
-    BRANCH	= 0b100
-    MEM     = 0b101
+    IO      = 0b001
+    ALUR	= 0b010 # register-register ALU operation
+    ALUI	= 0b011 # register-immediate ALU operation
+    JUMP	= 0b100
+    BRANCH	= 0b101
+    MEM     = 0b110
 
 
 class Fn(Enum):
     # CTL
-    NOP         = 0b000
-    HALT        = 0b001
-    IN          = 0b010
-    OUT         = 0b011
+    HALT        = 0b000
+    NOP         = 0b001
+
+    # IO
+    IW          = 0b000
+    OW          = 0b001
 
     # ALUR and ALUI
     ADD         = 0b000
@@ -40,14 +43,17 @@ class Fn(Enum):
     GTE         = 0b011
 
     # MEM
-    LOAD        = 0b000
-    STORE       = 0b001
+    LW          = 0b000
+    SW          = 0b100
+    #LB          = 0b001
+    #SB          = 0b101
+    #LH          = 0b010
+    #SH          = 0b110
 
 # 33 registers:
 # 1 zero register, 31 general purpose and a program counter
 regnames = ['r0'] + [f'r{i}' for i in range(1, 32)] + ['pc']
-pc = 32
-word = 4 # bytes
+PC = 32
 regfile = None
 memory = None
 
@@ -55,25 +61,6 @@ def reset():
     global regfile, memory
     regfile = [0] * 33
     memory = [0] * 1000 # memory is word addressable
-
-def ctl(fn, x):
-    if fn == Fn.HALT:
-        return False
-    elif fn == Fn.NOP:
-        regfile[PC] += word
-    else:
-        io(fn, x)
-    return True
-
-def io(fn, x):
-    if fn == Fn.IN:
-        try:
-            regfile[x] = int(input('<weekcore> '))
-        except ValueError:
-            print('error: non-integer input', file=sys.stderr)
-            exit(1)
-    elif fn == Fn.OUT:
-        print(int(regfile[x]))
 
 def alu(fn, x, y):
     if fn == Fn.ADD:
@@ -105,10 +92,10 @@ def cond(fn, x, y):
         ret = x >= y
     return ret
 
-def mem(fn, x, y):
-
-def field(i, s, e): # get field of inst between s and e
+def gf(i, s, e): # get field of inst between s and e
     return (i >> e) & ((1 << (s - e + 1)) - 1)
+
+#def sf(i, v, s, e):
 
 def sext(x, l): # sign extend
     if x >> (l - 1) == 1:
@@ -119,42 +106,63 @@ def sext(x, l): # sign extend
 def step():
     # fetch
     inst = memory[regfile[PC]]
-    stat = True
+    newpc = regfile[PC]
 
     # decode
-    op = field(inst, 31, 29)
-    fn = field(inst, 28, 24)
-    r_a = field(inst, 23, 19)
-    r_b = field(inst, 18, 14)
-    r_c = field(inst, 13, 9)
-    imm_s = sext(field(inst, 18, 0))
-    imm_i = sext(field(inst, 13, 0))
-    imm_b1 = sext(field(inst, 13, 7))
-    imm_b2 = sext(field(inst, 6, 0))
+    op = Op(gf(inst, 31, 29))
+    fn = Fn(gf(inst, 28, 26))
+    r_a = gf(inst, 25, 21)
+    r_b = gf(inst, 20, 16)
+    r_c = gf(inst, 15, 11)
+    imm_s = sext(gf(inst, 20, 0), 21)
+    imm_i = sext(gf(inst, 15, 0), 16)
 
+    # TODO: refactor execute and write
     # execute
-    #stat = False if op == Op.CTL and fn == Fn.HALT else True
     if op == Op.CTL:
-        stat = ctl(fn, r_a)
+        if fn == Fn.HALT:
+            return False
+        else:
+            newpc += 1
+    elif op == Op.IO:
+        if fn == Fn.IW:
+            try:
+                regfile[r_a] = int(input('<weekcore> ')) + imm_s
+            except ValueError:
+                print('error: non-integer input', file=stderr)
+                exit(1)
+        elif fn == Fn.OW:
+            print(int(regfile[r_a]) + imm_s)
     elif op == Op.ALUR:
         regfile[r_a] = alu(fn, regfile[r_b], regfile[r_c])
     elif op == Op.ALUI:
         regfile[r_a] = alu(fn, regfile[r_b], imm_i)
     elif op == Op.JUMP:
         regfile[r_a] = regfile[pc]
-        regfile[pc] = regfile[r_b] if fn == Fn.ABS else (regfile[pc] + imm_i)
+        newpc = regfile[r_b] if fn == Fn.ABS else (newpc + imm_i)
     elif op == Op.BRANCH:
-        regfile[pc] += imm_b1 if cond(fn, regfile[r_a], regfile[r_b]) else imm_b2
+        newpc += imm_i if cond(fn, regfile[r_a], regfile[r_b]) else 1
     elif op == Op.MEM:
-        if fn == Fn.LOAD:
-            regfile[r_a] = memory[regfile[r_b]]
-        elif fn == Fn.STORE:
+        if fn == Fn.LW:
+            regfile[r_a] = memory[regfile[r_b] + imm_i]
+        elif fn == Fn.SW:
             memory[regfile[r_a]] = regfile[r_b]
 
     # write
-    # not really a stage yet, will be done after pipeline refactor
+    regfile[PC] = (newpc + 1) if newpc == regfile[PC] else 0
+
+    return True
 
 
 
 if __name__ == '__main__':
-    print('yes')
+    prog = [
+            0b00100100000000000000000000001000,
+            0b00100000001000000000000000000000,
+            0b00100100001000000000000000000000,
+            0b00000000000000000000000000000000,
+            ]
+    reset()
+    memory = prog + memory[len(prog):]
+    while step():
+        pass
