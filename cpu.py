@@ -4,14 +4,13 @@ from sys import argv, stderr
 from enum import Enum
 
 class Op(Enum):
-    CTL     = 0b000
-    IO      = 0b001
-    ALUR	= 0b010 # register-register ALU operation
-    ALUI	= 0b011 # register-immediate ALU operation
-    JUMP	= 0b100
-    BRANCH	= 0b101
-    MEM     = 0b110
-
+    CTL         = 0b000
+    IO          = 0b001
+    ALUR	    = 0b010 # register-register ALU operation
+    ALUI	    = 0b011 # register-immediate ALU operation
+    JUMP	    = 0b100
+    BRANCH	    = 0b101
+    MEM         = 0b110
 
 class Fn(Enum):
     # CTL
@@ -21,6 +20,10 @@ class Fn(Enum):
     # IO
     IW          = 0b000
     OW          = 0b001
+    #IB          = 0b010
+    #OB          = 0b011
+    #IH          = 0b100
+    #OH          = 0b101
 
     # ALUR and ALUI
     ADD         = 0b000
@@ -56,6 +59,18 @@ regnames = ['r0'] + [f'r{i}' for i in range(1, 32)] + ['pc']
 PC = 32
 regfile = None
 memory = None
+
+def memdump():
+    global memory
+    print('==memdump==')
+    for i,w in enumerate(memory):
+        print(f'{i}:\t' + '0b{:032b}'.format(w))
+
+def regdump():
+    global regfile
+    print('==regdump==')
+    for i,w in enumerate(regfile):
+        print(f'{regnames[i]}:\t' + '0b{:032b}'.format(w))
 
 def reset():
     global regfile, memory
@@ -94,8 +109,6 @@ def cond(fn, x, y):
 
 def gf(i, s, e): # get field of inst between s and e
     return (i >> e) & ((1 << (s - e + 1)) - 1)
-
-#def sf(i, v, s, e):
 
 def sext(x, l): # sign extend
     if x >> (l - 1) == 1:

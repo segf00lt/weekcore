@@ -2,3 +2,4 @@
 *.vim
 tags
 weekcore.md
+__pycache__
