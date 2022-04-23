@@ -31,7 +31,7 @@ class Fn(Enum):
     AND         = 0b010
     OR          = 0b011
     XOR         = 0b100
-    LSHIFT      = 0b101
+    LS          = 0b101
     MUL         = 0b110
     DIV         = 0b111
 
@@ -43,7 +43,7 @@ class Fn(Enum):
     EQ          = 0b000
     NE          = 0b001
     LT          = 0b010
-    GTE         = 0b011
+    GE          = 0b011
 
     # MEM
     LW          = 0b000
@@ -55,7 +55,7 @@ class Fn(Enum):
 
 # 33 registers:
 # 1 zero register, 31 general purpose and a program counter
-regnames = ['r0'] + [f'r{i}' for i in range(1, 32)] + ['pc']
+regnames = ['r0'] + [f'r{i}' for i in range(1, 32)] + ['PC']
 PC = 32
 regfile = None
 memory = None
@@ -88,7 +88,7 @@ def alu(fn, x, y):
         return x | y
     elif fn == Fn.XOR:
         return x ^ y
-    elif fn == Fn.LSHIFT:
+    elif fn == Fn.LS:
         return x << y
     elif fn == Fn.MUL:
         return x * y
@@ -103,7 +103,7 @@ def cond(fn, x, y):
         ret = x != y
     elif fn == Fn.LT:
         ret = x < y
-    elif fn == Fn.GTE:
+    elif fn == Fn.GE:
         ret = x >= y
     return ret
 
@@ -151,7 +151,7 @@ def step():
     elif op == Op.ALUI:
         regfile[r_a] = alu(fn, regfile[r_b], imm_i)
     elif op == Op.JUMP:
-        regfile[r_a] = regfile[pc]
+        regfile[r_a] = regfile[PC]
         newpc = regfile[r_b] if fn == Fn.ABS else (newpc + imm_i)
     elif op == Op.BRANCH:
         newpc += imm_i if cond(fn, regfile[r_a], regfile[r_b]) else 1
@@ -179,3 +179,4 @@ if __name__ == '__main__':
     memory = prog + memory[len(prog):]
     while step():
         pass
+    regdump()
