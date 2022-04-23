@@ -3,6 +3,11 @@
 from sys import argv, stderr
 from enum import Enum
 
+class InstType(Enum):
+    S = 0
+    R = 1
+    I = 2
+
 class Op(Enum):
     CTL         = 0b000
     IO          = 0b001
@@ -20,10 +25,10 @@ class Fn(Enum):
     # IO
     IW          = 0b000
     OW          = 0b001
-    #IB          = 0b010
-    #OB          = 0b011
-    #IH          = 0b100
-    #OH          = 0b101
+    IB          = 0b010
+    OB          = 0b011
+    IH          = 0b100
+    OH          = 0b101
 
     # ALUR and ALUI
     ADD         = 0b000
@@ -36,8 +41,7 @@ class Fn(Enum):
     DIV         = 0b111
 
     # JUMP
-    REL         = 0b000
-    ABS         = 0b001
+    J         = 0b000
 
     # BRANCH
     EQ          = 0b000
@@ -48,17 +52,32 @@ class Fn(Enum):
     # MEM
     LW          = 0b000
     SW          = 0b100
-    #LB          = 0b001
-    #SB          = 0b101
-    #LH          = 0b010
-    #SH          = 0b110
+    LB          = 0b001
+    SB          = 0b101
+    LH          = 0b010
+    SH          = 0b110
 
 # 33 registers:
 # 1 zero register, 31 general purpose and a program counter
-regnames = ['r0'] + [f'r{i}' for i in range(1, 32)] + ['PC']
-PC = 32
+regnames = ['r0'] + [f'r{i}' for i in range(1, 32)] + ['pc']
+pc = 32
 regfile = None
 memory = None
+
+class Regfile:
+    def __init__(self):
+        self.regs = [0] * 33
+    def __getitem__(self, key):
+        return self.regs[key]
+    def __setitem__(self, key, value):
+        if key == 0:
+            return
+        self.regs[key] = value
+
+def reset():
+    global regfile, memory
+    regfile = Regfile()
+    memory = [0] * 1000 # memory is word addressable
 
 def memdump():
     global memory
@@ -71,11 +90,6 @@ def regdump():
     print('==regdump==')
     for i,w in enumerate(regfile):
         print(f'{regnames[i]}:\t' + '0b{:032b}'.format(w))
-
-def reset():
-    global regfile, memory
-    regfile = [0] * 33
-    memory = [0] * 1000 # memory is word addressable
 
 def alu(fn, x, y):
     if fn == Fn.ADD:
@@ -118,8 +132,8 @@ def sext(x, l): # sign extend
 
 def step():
     # fetch
-    inst = memory[regfile[PC]]
-    newpc = regfile[PC]
+    inst = memory[regfile[pc]]
+    newpc = regfile[pc]
 
     # decode
     op = Op(gf(inst, 31, 29))
@@ -151,8 +165,8 @@ def step():
     elif op == Op.ALUI:
         regfile[r_a] = alu(fn, regfile[r_b], imm_i)
     elif op == Op.JUMP:
-        regfile[r_a] = regfile[PC]
-        newpc = regfile[r_b] if fn == Fn.ABS else (newpc + imm_i)
+        regfile[r_a] = regfile[pc]
+        newpc = regfile[r_b] + imm_i
     elif op == Op.BRANCH:
         newpc += imm_i if cond(fn, regfile[r_a], regfile[r_b]) else 1
     elif op == Op.MEM:
@@ -162,7 +176,7 @@ def step():
             memory[regfile[r_a]] = regfile[r_b]
 
     # write
-    regfile[PC] = (newpc + 1) if newpc == regfile[PC] else 0
+    regfile[pc] = (newpc + 1) if newpc == regfile[pc] else 0
 
     return True
 
@@ -170,13 +184,13 @@ def step():
 
 if __name__ == '__main__':
     prog = [
-            0b00100100000000000000000000001000,
-            0b00100000001000000000000000000000,
+            0b01100000001000000000000000011000,
+            0b01100100001000010000000000011001,
             0b00100100001000000000000000000000,
             0b00000000000000000000000000000000,
             ]
     reset()
     memory = prog + memory[len(prog):]
     while step():
+        regdump()
         pass
-    regdump()
