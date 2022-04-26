@@ -3,11 +3,6 @@
 from sys import argv, stderr
 from enum import Enum
 
-class InstType(Enum):
-    S = 0
-    R = 1
-    I = 2
-
 class Op(Enum):
     CTL         = 0b000
     IO          = 0b001
@@ -37,11 +32,11 @@ class Fn(Enum):
     OR          = 0b011
     XOR         = 0b100
     LS          = 0b101
-    MUL         = 0b110
-    DIV         = 0b111
+    RS          = 0b110
 
     # JUMP
-    J         = 0b000
+    J           = 0b000
+    JAL         = 0b001
 
     # BRANCH
     EQ          = 0b000
@@ -104,10 +99,8 @@ def alu(fn, x, y):
         return x ^ y
     elif fn == Fn.LS:
         return x << y
-    elif fn == Fn.MUL:
-        return x * y
-    elif fn == Fn.DIV:
-        return x / y
+    elif fn == Fn.RS:
+        return x >> y
 
 def cond(fn, x, y):
     ret = False

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 from sys import stderr, argv
-from cpu import InstType, Op, Fn, regnames
+from cpu import Op, Fn, regnames
+from re import compile as recomp
 
 # read file and strip comments and whitespace
 f = open(argv[1], 'r')
@@ -10,7 +11,7 @@ code = [l.strip() for l in code if l[0] != '#' and l[0] != '\n']
 f.close()
 
 # assembler pass 1
-tab = {}
+labeltab = {}
 pending = []
 n = 0
 tmp = []
@@ -20,90 +21,80 @@ for i,l in enumerate(code):
         n += 1
         continue
     while pending:
-        tab[pending.pop()[:-1]] = i - n # multiply by 4 for byte addressable memory
+        labeltab[pending.pop()[:-1]] = i - n # multiply by 4 for byte addressable memory
     tmp += [l]
 code = tmp
 
 # assembler pass 2
-def genhead(op, fn):
-    return op << 29 | fn << 26
+for i,l in enumerate(code):
+    l = l.split()
+    for j,t in enumerate(l):
+        try:
+            l[j] = str(labeltab[t])
+        except KeyError:
+            l[j] = t
+    code[i] = ' '.join(l)
+print(code)
 
-def geninst(head, r_a=0, r_b=0, r_c=0, imm_s=0, imm_i=0):
-    return head | r_a << 21 | r_b << 16 | r_c << 11 | imm_s | imm_i
+# assembler pass 3
+def geninst(op, fn, regs, imm):
+    return op << 29 | fn << 26 | regs[0] << 21 | regs[1] << 16 | regs[2] << 11 | imm
 
-ctl = {'halt': Fn.HALT.value, 'nop': Fn.NOP.value,}
-io = {'iw': Fn.IW.value, 'ow': Fn.OW.value,
-        'ib': Fn.IB.value, 'ob': Fn.OB.value,
-        'ih': Fn.IH.value, 'oh': Fn.OH.value,}
-alur = {'add': Fn.ADD.value, 'sub': Fn.SUB.value,
-        'and': Fn.AND.value, 'or': Fn.OR.value,
-        'xor': Fn.XOR.value, 'ls': Fn.LS.value,
-        'rs': Fn.LS.value, 'mul': Fn.MUL.value,
-        'div': Fn.DIV.value, 'mov': Fn.ADD.value,}
-alui = {'addi': Fn.ADD.value, 'subi': Fn.SUB.value,
-        'andi': Fn.AND.value, 'ori': Fn.OR.value,
-        'xori': Fn.XOR.value, 'lsi': Fn.LS.value,
-        'rsi': Fn.LS.value, 'muli': Fn.MUL.value,
-        'divi': Fn.DIV.value, 'movi': Fn.ADD.value,}
-jump = {'j': Fn.J.value, 'jal': Fn.J.value, 'jalr': Fn.J.value,}
-branch = {'beq': Fn.EQ.value, 'bne': Fn.NE.value, 'blt': Fn.LT.value,
-        'bgt': Fn.LT.value, 'ble': Fn.GE.value, 'bge': Fn.GE.value,}
-mem = {'lw': Fn.LW.value, 'sw': Fn.SW.value, 'lb': Fn.LB.value,
-        'sb': Fn.SB.value, 'lh': Fn.LH.value, 'sh': Fn.SH.value,}
+# grammar
+reg = '(pc|r[0-9][0-9]*)'
+num = '(-?[0-9]+)'
+ctl = '(halt|nop)'
+io = '([io][whb])'
+alu = '(add|sub|and|or|xor|ls|rs|mul|div)'
+jump = '(j|jal)'
+branch = '(beq|bne|blt|bge)'
+mem = '([ls][whb])'
+
+optab = [(ctl, Op.CTL),
+         (f"{io} {reg}", Op.IO), (f"{io} {num}", Op.IO),
+         (f"{alu} {reg} {reg} {reg}", Op.ALUR), (f"{alu} {reg} {reg} {num}", Op.ALUI),
+         (f"{jump} {reg}", Op.JUMP), (f"{jump} {reg} {reg}", Op.JUMP), (f"{jump} {reg} {num}", Op.JUMP),
+         (f"{branch} {reg} {reg} {num}", Op.BRANCH),
+         (f"{mem} {reg} {reg}", Op.MEM), (f"{mem} {reg} {num}", Op.MEM)]
+optab = [(recomp(t[0]), t[1]) for t in optab] # compile regex
+
+fntab = {'halt': Fn.HALT, 'nop': Fn.NOP,
+         'iw': Fn.IW, 'ih': Fn.IH, 'ib': Fn.IB, 'ow': Fn.OW, 'oh': Fn.OH, 'ob': Fn.OB,
+         'add': Fn.ADD, 'sub': Fn.SUB, 'and': Fn.AND, 'or': Fn.OR, 'xor': Fn.XOR, 'ls': Fn.LS, 'rs': Fn.RS,
+         'j': Fn.J, 'jal': Fn.JAL,
+         'beq': Fn.EQ, 'bne': Fn.NE, 'blt': Fn.LT, 'bge': Fn.GE,
+         'lw': Fn.LW, 'lh': Fn.LH, 'lb': Fn.LB, 'sw': Fn.SW, 'sh': Fn.SH, 'sb': Fn.SB}
+
+regtab = {r: i for i,r in enumerate(regnames)}
 
 prog = []
 for _,l in enumerate(code):
-    token = l.split()
-    print(l)
-    operate = token[0]
-    args = token[1:]
-    head = 0
-    inst = 0
-    insttype = InstType.S
-    # generate opcode and funct
-    if operate in ctl:
-        head = genhead(Op.CTL.value, ctl[operate])
-    elif operate in io:
-        head = genhead(Op.IO.value, io[operate])
-    elif operate in alur:
-        head = genhead(Op.ALUR.value, alur[operate])
-        insttype = InstType.R
-    elif operate in alui:
-        head = genhead(Op.ALUI.value, alui[operate])
-        insttype = InstType.I
-    elif operate in jump:
-        head = genhead(Op.JUMP.value, jump[operate])
-        insttype = InstType.I
-    elif operate in branch:
-        head = genhead(Op.BRANCH.value, branch[operate])
-        insttype = InstType.I
-    elif operate in mem:
-        head = genhead(Op.MEM.value, mem[operate])
-        insttype = InstType.I
-    # generate regs and imms
+    m = None
+    op = None
+    fn = None
+    regs = []
     imm = 0
-    r = [0] * 3
-    for i,a in enumerate(args):
-        if i >= 3:
-            print(f"error: too many arguments\nline: {''.join(l)}\n", file=stderr)
+
+    for _,ent in enumerate(optab):
+        if m := ent[0].fullmatch(l):
+            op = ent[1].value
+            break
+        else:
+            print(f"error: bad instruction: {l}", file=stderr)
             exit(1)
+
+    fn = fntab[m.group(1)].value
+
+    for g in m.groups()[1:]:
         try:
-            imm = int(a)
-        except ValueError:
-            try:
-                r[i] = regnames.index(a)
-            except ValueError:
-                print(f"error: invalid argument {a}\nline: {''.join(l)}\n", file=stderr)
-                exit(1)
-    # build instruction
-    match insttype:
-        case InstType.S:
-            inst = geninst(head, r_a=r[0], imm_s=imm)
-        case InstType.R:
-            inst = geninst(head, r_a=r[0], r_b=r[1], r_c=r[2])
-        case InstType.I:
-            inst = geninst(head, r_a=r[0], r_b=r[1], imm_i=imm)
-    prog += [inst]
+            regs += [regtab[g]]
+        except KeyError:
+            imm = int(g)
+    regs += [0] * (3 - len(regs)) # pad with zeros if needed
+    prog += [geninst(op, fn, regs, imm)]
+
 
 for i,p in enumerate(prog):
     print(f"{i}:\t" + "0b{:032b}".format(p))
+
+# write executable
