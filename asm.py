@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 from sys import stderr, argv
-from cpu import Op, Fn, regnames
+from cpu import Op, Fn, regnames, progdump
 from re import compile as recomp
+from binascii import hexlify
 
 # read file and strip comments and whitespace
 f = open(argv[1], 'r')
@@ -34,7 +35,6 @@ for i,l in enumerate(code):
         except KeyError:
             l[j] = t
     code[i] = ' '.join(l)
-print(code)
 
 # assembler pass 3
 def geninst(op, fn, regs, imm):
@@ -53,10 +53,12 @@ mem = '([ls][whb])'
 optab = [(ctl, Op.CTL),
          (f"{io} {reg}", Op.IO), (f"{io} {num}", Op.IO),
          (f"{alu} {reg} {reg} {reg}", Op.ALUR), (f"{alu} {reg} {reg} {num}", Op.ALUI),
-         (f"{jump} {reg}", Op.JUMP), (f"{jump} {reg} {reg}", Op.JUMP), (f"{jump} {reg} {num}", Op.JUMP),
+         (f"{jump} {reg}", Op.JUMP), (f"{jump} {num}", Op.JUMP),
+         (f"{jump} {reg} {reg}", Op.JUMP), (f"{jump} {reg} {num}", Op.JUMP),
          (f"{branch} {reg} {reg} {num}", Op.BRANCH),
          (f"{mem} {reg} {reg}", Op.MEM), (f"{mem} {reg} {num}", Op.MEM)]
-optab = [(recomp(t[0]), t[1]) for t in optab] # compile regex
+
+optab = [(recomp(t[0]), t[1]) for t in optab]
 
 fntab = {'halt': Fn.HALT, 'nop': Fn.NOP,
          'iw': Fn.IW, 'ih': Fn.IH, 'ib': Fn.IB, 'ow': Fn.OW, 'oh': Fn.OH, 'ob': Fn.OB,
@@ -79,9 +81,10 @@ for _,l in enumerate(code):
         if m := ent[0].fullmatch(l):
             op = ent[1].value
             break
-        else:
-            print(f"error: bad instruction: {l}", file=stderr)
-            exit(1)
+
+    if not m:
+        print(f"error: bad instruction: {l}", file=stderr)
+        exit(1)
 
     fn = fntab[m.group(1)].value
 
@@ -93,8 +96,10 @@ for _,l in enumerate(code):
     regs += [0] * (3 - len(regs)) # pad with zeros if needed
     prog += [geninst(op, fn, regs, imm)]
 
-
-for i,p in enumerate(prog):
-    print(f"{i}:\t" + "0b{:032b}".format(p))
-
+progdump(prog)
 # write executable
+aout = [i.to_bytes(4, 'big') for i in prog]
+with open('a.out', 'wb') as file:
+    for a in aout:
+        file.write(a)
+    file.close()

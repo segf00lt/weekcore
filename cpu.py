@@ -52,12 +52,17 @@ class Fn(Enum):
     LH          = 0b010
     SH          = 0b110
 
-# 33 registers:
-# 1 zero register, 31 general purpose and a program counter
+# 33 registers: 1 zero register, 31 general purpose and a program counter
 regnames = ['r0'] + [f'r{i}' for i in range(1, 32)] + ['pc']
 pc = 32
 regfile = None
 memory = None
+
+def binload(handle):
+    with open(handle, "rb") as f:
+        data = bytes(f.read())
+    prog = [int.from_bytes(data[i:i+4], 'big') for i in range(0, len(data), 4)]
+    return prog
 
 class Regfile:
     def __init__(self):
@@ -74,17 +79,25 @@ def reset():
     regfile = Regfile()
     memory = [0] * 1000 # memory is word addressable
 
+def progdump(prog):
+    print('==progdump==')
+    for i,p in enumerate(prog):
+        print(f"{i}:\t" + "0b{:032b}".format(p))
+    print('============')
+
 def memdump():
     global memory
     print('==memdump==')
     for i,w in enumerate(memory):
         print(f'{i}:\t' + '0b{:032b}'.format(w))
+    print('===========')
 
 def regdump():
     global regfile
     print('==regdump==')
     for i,w in enumerate(regfile):
         print(f'{regnames[i]}:\t' + '0b{:032b}'.format(w))
+    print('===========')
 
 def alu(fn, x, y):
     if fn == Fn.ADD:
@@ -169,21 +182,13 @@ def step():
             memory[regfile[r_a]] = regfile[r_b]
 
     # write
-    regfile[pc] = (newpc + 1) if newpc == regfile[pc] else 0
+    regfile[pc] = (newpc + 1) if newpc == regfile[pc] else newpc
 
     return True
 
-
-
 if __name__ == '__main__':
-    prog = [
-            0b01100000001000000000000000011000,
-            0b01100100001000010000000000011001,
-            0b00100100001000000000000000000000,
-            0b00000000000000000000000000000000,
-            ]
+    prog = binload(argv[1])
     reset()
     memory = prog + memory[len(prog):]
     while step():
-        regdump()
         pass
