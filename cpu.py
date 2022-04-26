@@ -77,7 +77,8 @@ class Regfile:
 def reset():
     global regfile, memory
     regfile = Regfile()
-    memory = [0] * 1000 # memory is word addressable
+    # TODO make memory byte addressable
+    memory = [0] * 1000
 
 def progdump(prog):
     print('==progdump==')
@@ -150,7 +151,7 @@ def step():
     imm_s = sext(gf(inst, 20, 0), 21)
     imm_i = sext(gf(inst, 15, 0), 16)
 
-    # TODO: refactor execute and write
+    # TODO refactor execute and write
     # execute
     if op == Op.CTL:
         if fn == Fn.HALT:

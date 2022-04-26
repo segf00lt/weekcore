@@ -3,7 +3,6 @@
 from sys import stderr, argv
 from cpu import Op, Fn, regnames, progdump
 from re import compile as recomp
-from binascii import hexlify
 
 # read file and strip comments and whitespace
 f = open(argv[1], 'r')
@@ -96,7 +95,6 @@ for _,l in enumerate(code):
     regs += [0] * (3 - len(regs)) # pad with zeros if needed
     prog += [geninst(op, fn, regs, imm)]
 
-progdump(prog)
 # write executable
 aout = [i.to_bytes(4, 'big') for i in prog]
 with open('a.out', 'wb') as file:
