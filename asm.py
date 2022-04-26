@@ -100,4 +100,3 @@ aout = [i.to_bytes(4, 'big') for i in prog]
 with open('a.out', 'wb') as file:
     for a in aout:
         file.write(a)
-    file.close()
