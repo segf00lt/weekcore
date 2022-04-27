@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from sys import argv, stderr
+from struct import pack, unpack
 from enum import Enum
 
 class Op(Enum):
@@ -60,9 +61,21 @@ memory = None
 
 def binload(handle):
     with open(handle, "rb") as f:
-        data = bytes(f.read())
-    prog = [int.from_bytes(data[i:i+4], 'big') for i in range(0, len(data), 4)]
-    return prog
+        return bytes(f.read())
+
+def memr(addr):
+    global memory
+    if addr < 0 or addr >= len(memory):
+        print(f"error: memory address {hex(addr)} out of bounds", file=stderr)
+        exit(1)
+    return unpack('>I', memory[addr:addr+4])[0]
+
+def memw(addr, data): # must pack data
+    global memory
+    if addr < 0 or addr >= len(memory):
+        print(f"error: memory address {hex(addr)} out of bounds", file=stderr)
+        exit(1)
+    memory = memory[:addr] + data + memory[addr+len(data):]
 
 class Regfile:
     def __init__(self):
@@ -77,9 +90,9 @@ class Regfile:
 def reset():
     global regfile, memory
     regfile = Regfile()
-    # TODO make memory byte addressable
-    memory = [0] * 1000
+    memory = b'\x00' * 8000
 
+# TODO refactor dumps
 def progdump(prog):
     print('==progdump==')
     for i,p in enumerate(prog):
@@ -139,7 +152,8 @@ def sext(x, l): # sign extend
 
 def step():
     # fetch
-    inst = memory[regfile[pc]]
+    inst = memr(regfile[pc])
+    #print('0b{:032b}'.format(inst))
     newpc = regfile[pc]
 
     # decode
@@ -158,6 +172,7 @@ def step():
             return False
         else:
             newpc += 1
+    # TODO refactor IO
     elif op == Op.IO:
         if fn == Fn.IW:
             try:
@@ -175,15 +190,23 @@ def step():
         regfile[r_a] = regfile[pc]
         newpc = regfile[r_b] + imm_i
     elif op == Op.BRANCH:
-        newpc += imm_i if cond(fn, regfile[r_a], regfile[r_b]) else 1
+        newpc = imm_i if cond(fn, regfile[r_a], regfile[r_b]) else newpc
     elif op == Op.MEM:
         if fn == Fn.LW:
-            regfile[r_a] = memory[regfile[r_b] + imm_i]
+            regfile[r_a] = memr(regfile[r_b] + imm_i)
+        elif fn == Fn.LB:
+            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xff
+        elif fn == Fn.LH:
+            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xffff
         elif fn == Fn.SW:
-            memory[regfile[r_a]] = regfile[r_b]
+            memw(regfile[r_a] + imm_i, pack('>I', regfile[r_b]))
+        elif fn == Fn.SB:
+            memw(regfile[r_a] + imm_i, pack('>B', regfile[r_b] & 0xff))
+        elif fn == Fn.SH:
+            memw(regfile[r_a] + imm_i, pack('>H', regfile[r_b] & 0xffff))
 
     # write
-    regfile[pc] = (newpc + 1) if newpc == regfile[pc] else newpc
+    regfile[pc] = (newpc + 4) if newpc == regfile[pc] else newpc
 
     return True
 

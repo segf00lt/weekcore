@@ -21,9 +21,11 @@ for i,l in enumerate(code):
         n += 1
         continue
     while pending:
-        labeltab[pending.pop()[:-1]] = i - n # multiply by 4 for byte addressable memory
+        labeltab[pending.pop()[:-1]] = (i - n) * 4
     tmp += [l]
 code = tmp
+while pending:
+    labeltab[pending.pop()[:-1]] = (i - n) * 4
 
 # assembler pass 2
 for i,l in enumerate(code):
@@ -49,13 +51,15 @@ jump = '(j|jal)'
 branch = '(beq|bne|blt|bge)'
 mem = '([ls][whb])'
 
+# TODO add character, string, hex and binary literals
 optab = [(ctl, Op.CTL),
          (f"{io} {reg}", Op.IO), (f"{io} {num}", Op.IO),
          (f"{alu} {reg} {reg} {reg}", Op.ALUR), (f"{alu} {reg} {reg} {num}", Op.ALUI),
          (f"{jump} {reg}", Op.JUMP), (f"{jump} {num}", Op.JUMP),
          (f"{jump} {reg} {reg}", Op.JUMP), (f"{jump} {reg} {num}", Op.JUMP),
          (f"{branch} {reg} {reg} {num}", Op.BRANCH),
-         (f"{mem} {reg} {reg}", Op.MEM), (f"{mem} {reg} {num}", Op.MEM)]
+         (f"{mem} {reg} {reg}", Op.MEM), (f"{mem} {reg} {num}", Op.MEM),
+         (f"{mem} {num} {num}", Op.MEM), (f"{mem} {num} {reg}", Op.MEM)]
 
 optab = [(recomp(t[0]), t[1]) for t in optab]
 
@@ -91,6 +95,7 @@ for _,l in enumerate(code):
         try:
             regs += [regtab[g]]
         except KeyError:
+            regs += [0]
             imm = int(g)
     regs += [0] * (3 - len(regs)) # pad with zeros if needed
     prog += [geninst(op, fn, regs, imm)]
