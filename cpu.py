@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from sys import argv, stderr
+from sys import argv, stderr, stdin, stdout
 from struct import pack, unpack
 from enum import Enum
 
@@ -19,12 +19,8 @@ class Fn(Enum):
     NOP         = 0b001
 
     # IO
-    IW          = 0b000
-    OW          = 0b001
-    IB          = 0b010
-    OB          = 0b011
-    IH          = 0b100
-    OH          = 0b101
+    IN          = 0b000
+    OUT         = 0b001
 
     # ALUR and ALUI
     ADD         = 0b000
@@ -92,20 +88,7 @@ def reset():
     regfile = Regfile()
     memory = b'\x00' * 8000
 
-# TODO refactor dumps
-def progdump(prog):
-    print('==progdump==')
-    for i,p in enumerate(prog):
-        print(f"{i}:\t" + "0b{:032b}".format(p))
-    print('============')
-
-def memdump():
-    global memory
-    print('==memdump==')
-    for i,w in enumerate(memory):
-        print(f'{i}:\t' + '0b{:032b}'.format(w))
-    print('===========')
-
+# TODO better dumps
 def regdump():
     global regfile
     print('==regdump==')
@@ -153,7 +136,6 @@ def sext(x, l): # sign extend
 def step():
     # fetch
     inst = memr(regfile[pc])
-    #print('0b{:032b}'.format(inst))
     newpc = regfile[pc]
 
     # decode
@@ -172,16 +154,11 @@ def step():
             return False
         else:
             newpc += 1
-    # TODO refactor IO
     elif op == Op.IO:
-        if fn == Fn.IW:
-            try:
-                regfile[r_a] = int(input('<weekcore> ')) + imm_s
-            except ValueError:
-                print('error: non-integer input', file=stderr)
-                exit(1)
-        elif fn == Fn.OW:
-            print(int(regfile[r_a]) + imm_s)
+        if fn == Fn.IN:
+            regfile[r_a] = ord(stdin.read(1)) + imm_s
+        elif fn == Fn.OUT:
+            stdout.write(pack('>I', regfile[r_a] + imm_s).decode('unicode_escape')[0])
     elif op == Op.ALUR:
         regfile[r_a] = alu(fn, regfile[r_b], regfile[r_c])
     elif op == Op.ALUI:
@@ -195,15 +172,15 @@ def step():
         if fn == Fn.LW:
             regfile[r_a] = memr(regfile[r_b] + imm_i)
         elif fn == Fn.LB:
-            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xff
+            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xff000000
         elif fn == Fn.LH:
-            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xffff
+            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xffff0000
         elif fn == Fn.SW:
-            memw(regfile[r_a] + imm_i, pack('>I', regfile[r_b]))
+            memw(regfile[r_a] + imm_i, pack('>I', regfile[r_b] & 0xffffffff))
         elif fn == Fn.SB:
-            memw(regfile[r_a] + imm_i, pack('>B', regfile[r_b] & 0xff))
+            memw(regfile[r_a] + imm_i, pack('>B', regfile[r_b] & 0xff000000))
         elif fn == Fn.SH:
-            memw(regfile[r_a] + imm_i, pack('>H', regfile[r_b] & 0xffff))
+            memw(regfile[r_a] + imm_i, pack('>H', regfile[r_b] & 0xffff0000))
 
     # write
     regfile[pc] = (newpc + 4) if newpc == regfile[pc] else newpc
