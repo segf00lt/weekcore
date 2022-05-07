@@ -59,19 +59,19 @@ def binload(handle):
     with open(handle, "rb") as f:
         return bytes(f.read())
 
-def memr(addr):
+def memr(begin, end): # unpack data for loads
     global memory
-    if addr < 0 or addr >= len(memory):
-        print(f"error: memory address {hex(addr)} out of bounds", file=stderr)
-        exit(1)
-    return unpack('>I', memory[addr:addr+4])[0]
+    test = lambda x: x < 0 or (x + 1) >= len(memory)
+    if test(begin) or test(end):
+        raise Exception(f"memory address {hex(addr)} out of bounds")
+    return memory[begin:end if end != 0 else begin + 1]
 
 def memw(addr, data): # must pack data
     global memory
-    if addr < 0 or addr >= len(memory):
-        print(f"error: memory address {hex(addr)} out of bounds", file=stderr)
-        exit(1)
-    memory = memory[:addr] + data + memory[addr+len(data):]
+    l = len(data)
+    if addr < 0 or (addr + l) >= len(memory):
+        raise Exception(f"memory address {hex(addr)} out of bounds")
+    memory = memory[:addr] + data + memory[addr+l:]
 
 class Regfile:
     def __init__(self):
@@ -88,13 +88,18 @@ def reset():
     regfile = Regfile()
     memory = b'\x00' * 8000
 
-# TODO better dumps
 def regdump():
     global regfile
     print('==regdump==')
     for i,w in enumerate(regfile):
-        print(f'{regnames[i]}:\t' + '0b{:032b}'.format(w))
+        print(f'{regnames[i]}:\t' + '0b' + \
+                '_'.join(['{:032b}'.format(w)[i:i+8] for i in range(0,32,8)]))
     print('===========')
+
+def instdump(inst):
+    print('==instdump==')
+    print('0b' + '_'.join(['{:032b}'.format(inst)[i:i+8] for i in range(0,32,8)]))
+    print('============')
 
 def alu(fn, x, y):
     if fn == Fn.ADD:
@@ -135,7 +140,7 @@ def sext(x, l): # sign extend
 
 def step():
     # fetch
-    inst = memr(regfile[pc])
+    inst = unpack('>I', memr(regfile[pc], regfile[pc] + 4))[0]
     newpc = regfile[pc]
 
     # decode
@@ -144,8 +149,7 @@ def step():
     r_a = gf(inst, 25, 21)
     r_b = gf(inst, 20, 16)
     r_c = gf(inst, 15, 11)
-    imm_s = sext(gf(inst, 20, 0), 21)
-    imm_i = sext(gf(inst, 15, 0), 16)
+    imm = sext(gf(inst, 15, 0), 16)
 
     # TODO refactor execute and write
     # execute
@@ -156,31 +160,33 @@ def step():
             newpc += 1
     elif op == Op.IO:
         if fn == Fn.IN:
-            regfile[r_a] = ord(stdin.read(1)) + imm_s
+            n = 1 if r_b == 0 else regfile[r_b] - regfile[r_a]
+            memw(regfile[r_a] + imm, bytes(stdin.read(n), 'utf8'))
         elif fn == Fn.OUT:
-            stdout.write(pack('>I', regfile[r_a] + imm_s).decode('unicode_escape')[0])
+            stdout.write(memr(regfile[r_a] + imm, regfile[r_b]).decode('unicode_escape'))
     elif op == Op.ALUR:
         regfile[r_a] = alu(fn, regfile[r_b], regfile[r_c])
     elif op == Op.ALUI:
-        regfile[r_a] = alu(fn, regfile[r_b], imm_i)
+        regfile[r_a] = alu(fn, regfile[r_b], imm)
     elif op == Op.JUMP:
         regfile[r_a] = regfile[pc]
-        newpc = regfile[r_b] + imm_i
+        newpc = regfile[r_b] + imm
     elif op == Op.BRANCH:
-        newpc = imm_i if cond(fn, regfile[r_a], regfile[r_b]) else newpc
+        newpc = imm if cond(fn, regfile[r_a], regfile[r_b]) else newpc
     elif op == Op.MEM:
+        laddr = regfile[r_b] + imm
         if fn == Fn.LW:
-            regfile[r_a] = memr(regfile[r_b] + imm_i)
+            regfile[r_a] = unpack('>I', memr(laddr, laddr + 4))[0]
         elif fn == Fn.LB:
-            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xff000000
+            regfile[r_a] = unpack('>B', memr(laddr, laddr + 1))[0]
         elif fn == Fn.LH:
-            regfile[r_a] = memr(regfile[r_b] + imm_i) & 0xffff0000
+            regfile[r_a] = unpack('>H', memr(laddr, laddr + 2))[0]
         elif fn == Fn.SW:
-            memw(regfile[r_a] + imm_i, pack('>I', regfile[r_b] & 0xffffffff))
+            memw(regfile[r_a] + imm, pack('>I', regfile[r_b] & 0xffffffff))
         elif fn == Fn.SB:
-            memw(regfile[r_a] + imm_i, pack('>B', regfile[r_b] & 0xff000000))
+            memw(regfile[r_a] + imm, pack('>B', regfile[r_b] & 0xff000000))
         elif fn == Fn.SH:
-            memw(regfile[r_a] + imm_i, pack('>H', regfile[r_b] & 0xffff0000))
+            memw(regfile[r_a] + imm, pack('>H', regfile[r_b] & 0xffff0000))
 
     # write
     regfile[pc] = (newpc + 4) if newpc == regfile[pc] else newpc

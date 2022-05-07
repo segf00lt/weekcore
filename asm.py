@@ -4,32 +4,43 @@ from sys import stderr, argv
 from cpu import Op, Fn, regnames
 from re import compile as recomp
 
-# TODO better dumps
+# TODO program dump
 
 # read file and strip comments and whitespace
-f = open(argv[1], 'r')
+name = argv[1]
+if not name.endswith('.asm'):
+    raise Exception(f"bad file {name}")
+f = open(name, 'r')
 code = f.readlines()
 code = [l.strip() for l in code if l[0] != '#' and l[0] != '\n']
 f.close()
 
-# assembler pass 1
+# store label locations
 labeltab = {}
 pending = []
-n = 0
+prev = 0 # num bytes in program up to label
+cur = 0 # num bytes from label to end of inst or literal
 tmp = []
-for i,l in enumerate(code):
+for l in code:
     if l[-1] == ':':
         pending += [l]
-        n += 1
         continue
+    else:
+        prev = cur
+        if l[0] == '\'':
+            cur += 1
+        elif l[0] == '\"':
+            cur += len(bytes(l, 'utf8').decode('unicode_escape')) - 2
+        else:
+            cur += 4
     while pending:
-        labeltab[pending.pop()[:-1]] = (i - n) * 4
+        labeltab[pending.pop()[:-1]] = prev
     tmp += [l]
 code = tmp
 while pending:
-    labeltab[pending.pop()[:-1]] = (i - n) * 4
+    labeltab[pending.pop()[:-1]] = prev
 
-# assembler pass 2
+# replace labels with values
 for i,l in enumerate(code):
     l = l.split()
     for j,t in enumerate(l):
@@ -39,7 +50,7 @@ for i,l in enumerate(code):
             l[j] = t
     code[i] = ' '.join(l)
 
-# assembler pass 3
+# parsing and codegen
 def geninst(op, fn, regs, imm):
     return op << 29 | fn << 26 | regs[0] << 21 | regs[1] << 16 | regs[2] << 11 | imm
 
@@ -63,6 +74,7 @@ store = '(s[whb])'
 
 optab = [(ctl, Op.CTL), (lit, None),
          (f"{io} {reg}", Op.IO), (f"{io} {num}", Op.IO),
+         (f"{io} {reg} {reg}", Op.IO),
          (f"{alu} {reg} {reg} {reg}", Op.ALUR), (f"{alu} {reg} {reg} {num}", Op.ALUI),
          (f"{jump} {reg}", Op.JUMP), (f"{jump} {num}", Op.JUMP),
          (f"{jump} {reg} {reg}", Op.JUMP), (f"{jump} {reg} {num}", Op.JUMP),
@@ -119,8 +131,7 @@ for _,l in enumerate(code):
             break
 
     if not m:
-        print(f"error: bad instruction: {l}", file=stderr)
-        exit(1)
+        raise Exception(f"bad instruction {l}")
 
     if op is None:
         continue
@@ -143,7 +154,7 @@ for _,l in enumerate(code):
                 imm = scont(int(g, base=16), immlen)
             else:
                 imm = scont(int(g, base=10), immlen)
-    regs += [0] * (3 - len(regs)) # pad with zeros if needed
+    regs += [0] * (3 - len(regs))
     inst = geninst(op, fn, regs, imm).to_bytes(4, 'big')
     prog = bytecat(prog, inst)
 
