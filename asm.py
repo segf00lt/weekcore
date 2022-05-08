@@ -4,7 +4,12 @@ from sys import stderr, argv
 from cpu import Op, Fn, regnames
 from re import compile as recomp
 
-# TODO program dump
+def progdump(prog):
+    print('==progdump==')
+    for i in range(0, len(prog), 4):
+        inst = int.from_bytes(prog[i:i+4], 'big')
+        print(f'{i//4}:\t' + '0b' + '_'.join(['{:032b}'.format(inst)[i:i+8] for i in range(0,32,8)]))
+    print('============')
 
 # read file and strip comments and whitespace
 name = argv[1]
@@ -65,33 +70,36 @@ num = f"({dnum}|{bnum}|{hnum}|{char}|{escape})"
 lit = f"({dnum}|{bnum}|{hnum}|{string}|{char}|{escape})"
 reg = '(pc|r[0-9][0-9]*)'
 ctl = '(halt|nop)'
-io = '(in|out)'
-alu = '(add|sub|and|or|xor|ls|rs|mul|div)'
+io = '(in|out|outd|outb|outh|outc)'
+alu = '(add|sub|and|or|xor|ls|rs)'
+md = '(mul|div)'
 jump = '(j|jal)'
 branch = '(beq|bne|blt|bge)'
 load = '(l[whb])'
 store = '(s[whb])'
 
 optab = [(ctl, Op.CTL), (lit, None),
-         (f"{io} {reg}", Op.IO), (f"{io} {num}", Op.IO),
-         (f"{io} {reg} {reg}", Op.IO),
-         (f"{alu} {reg} {reg} {reg}", Op.ALUR), (f"{alu} {reg} {reg} {num}", Op.ALUI),
-         (f"{jump} {reg}", Op.JUMP), (f"{jump} {num}", Op.JUMP),
-         (f"{jump} {reg} {reg}", Op.JUMP), (f"{jump} {reg} {num}", Op.JUMP),
-         (f"{branch} {reg} {reg} {num}", Op.BRANCH),
-         (f"{load} {reg} {reg}", Op.MEM),
-         (f"{store} {reg} {reg}", Op.MEM),
-         (f"{load} {reg} {num}", Op.MEM),
-         (f"{store} {num} {reg}", Op.MEM)]
+        (f"{io} {reg}", Op.IO), (f"{io} {num}", Op.IO),
+        (f"(in|out) {reg} {reg}", Op.IO),
+        (f"{alu} {reg} {reg} {reg}", Op.ALUR), (f"{alu} {reg} {reg} {num}", Op.ALUI),
+        (f"{md} {reg} {reg} {reg}", Op.MD),
+        (f"{jump} {reg}", Op.JUMP), (f"{jump} {num}", Op.JUMP),
+        (f"{jump} {reg} {reg}", Op.JUMP), (f"{jump} {reg} {num}", Op.JUMP),
+        (f"{branch} {reg} {reg} {num}", Op.BRANCH),
+        (f"{load} {reg} {reg}", Op.MEM),
+        (f"{store} {reg} {reg}", Op.MEM),
+        (f"{load} {reg} {num}", Op.MEM),
+        (f"{store} {num} {reg}", Op.MEM)]
 
 optab = [(recomp(t[0]), t[1]) for t in optab]
 
 fntab = {'halt': Fn.HALT, 'nop': Fn.NOP,
-         'in': Fn.IN, 'out': Fn.OUT,
-         'add': Fn.ADD, 'sub': Fn.SUB, 'and': Fn.AND, 'or': Fn.OR, 'xor': Fn.XOR, 'ls': Fn.LS, 'rs': Fn.RS,
-         'j': Fn.J, 'jal': Fn.JAL,
-         'beq': Fn.EQ, 'bne': Fn.NE, 'blt': Fn.LT, 'bge': Fn.GE,
-         'lw': Fn.LW, 'lh': Fn.LH, 'lb': Fn.LB, 'sw': Fn.SW, 'sh': Fn.SH, 'sb': Fn.SB}
+        'in': Fn.IN, 'out': Fn.OUT, 'outd': Fn.OUTD, 'outb': Fn.OUTB, 'outh': Fn.OUTH, 'outc': Fn.OUTC,
+        'add': Fn.ADD, 'sub': Fn.SUB, 'and': Fn.AND, 'or': Fn.OR, 'xor': Fn.XOR, 'ls': Fn.LS, 'rs': Fn.RS,
+        'mul': Fn.MUL, 'div': Fn.DIV,
+        'j': Fn.J, 'jal': Fn.JAL,
+        'beq': Fn.EQ, 'bne': Fn.NE, 'blt': Fn.LT, 'bge': Fn.GE,
+        'lw': Fn.LW, 'lh': Fn.LH, 'lb': Fn.LB, 'sw': Fn.SW, 'sh': Fn.SH, 'sb': Fn.SB}
 
 regtab = {r: i for i,r in enumerate(regnames)}
 
@@ -158,6 +166,7 @@ for _,l in enumerate(code):
     inst = geninst(op, fn, regs, imm).to_bytes(4, 'big')
     prog = bytecat(prog, inst)
 
+progdump(prog)
 # write executable
 with open('a.out', 'wb') as file:
     file.write(prog)

@@ -34,7 +34,7 @@ S-type (CTL)
 31   29  28                                                                  0
 [op   ]  [fn                                                                 ]
 
-R-type (ALUR)
+R-type (ALUR and MD)
 31   29  28    26  25    21  20     16  15     11  10                        0
 [op   ]  [fn    ]  [r_a   ]  [r_b    ]  [r_c    ]  [empty                    ]
 
@@ -45,7 +45,7 @@ I-type (IO, ALUI, JUMP, BRANCH and MEM)
 
 ### IO Redesign
 
-3 ways to do an IO call:
+3 types of IO calls:
 
 1. `op reg`
    produces a single byte IO operation using
@@ -63,3 +63,7 @@ The third kind of IO call allows strings to be quickly
 written to or read from, while the other two are more
 suited for when the number of bytes that will be read
 is unknown.
+
+OUTD, OUTB, OUTH and OUTC are special IO calls that allow
+printing the contents of a register as decimal, binary, hex
+or a character. These calls may be of type 1 or 2

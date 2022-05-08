@@ -9,9 +9,10 @@ class Op(Enum):
     IO          = 0b001
     ALUR	    = 0b010 # register-register ALU operation
     ALUI	    = 0b011 # register-immediate ALU operation
-    JUMP	    = 0b100
-    BRANCH	    = 0b101
-    MEM         = 0b110
+    MD          = 0b100 # register-register multiply or divide operation
+    JUMP	    = 0b101
+    BRANCH	    = 0b110
+    MEM         = 0b111
 
 class Fn(Enum):
     # CTL
@@ -21,6 +22,10 @@ class Fn(Enum):
     # IO
     IN          = 0b000
     OUT         = 0b001
+    OUTD        = 0b010 # output reg or imm as decimal number
+    OUTB        = 0b011 # output reg or imm as binary number
+    OUTH        = 0b100 # output reg or imm as hex number
+    OUTC        = 0b101 # output reg or imm as character
 
     # ALUR and ALUI
     ADD         = 0b000
@@ -30,6 +35,10 @@ class Fn(Enum):
     XOR         = 0b100
     LS          = 0b101
     RS          = 0b110
+
+    # MD
+    MUL         = 0b000
+    DIV         = 0b001
 
     # JUMP
     J           = 0b000
@@ -101,6 +110,21 @@ def instdump(inst):
     print('0b' + '_'.join(['{:032b}'.format(inst)[i:i+8] for i in range(0,32,8)]))
     print('============')
 
+def io(fn, x, y, z):
+    if fn == Fn.IN:
+        n = 1 if y == 0 else y - x
+        memw(x + z, bytes(stdin.read(n), 'utf8'))
+    elif fn == Fn.OUT:
+        stdout.write(memr(x + z, y).decode('unicode_escape'))
+    elif fn == Fn.OUTD:
+        stdout.write('{:d}'.format(x + z))
+    elif fn == Fn.OUTB:
+        stdout.write('0b{:032b}'.format(x + z))
+    elif fn == Fn.OUTH:
+        stdout.write('0x{:08h}'.format(x + z))
+    else:
+        stdout.write(chr(x + z))
+
 def alu(fn, x, y):
     if fn == Fn.ADD:
         return x + y
@@ -116,6 +140,12 @@ def alu(fn, x, y):
         return x << y
     elif fn == Fn.RS:
         return x >> y
+
+def muldiv(fn, x, y):
+    if fn == Fn.MUL:
+        return x * y
+    elif fn == Fn.DIV:
+        return x // y
 
 def cond(fn, x, y):
     ret = False
@@ -156,18 +186,15 @@ def step():
     if op == Op.CTL:
         if fn == Fn.HALT:
             return False
-        else:
-            newpc += 1
+        newpc += 1
     elif op == Op.IO:
-        if fn == Fn.IN:
-            n = 1 if r_b == 0 else regfile[r_b] - regfile[r_a]
-            memw(regfile[r_a] + imm, bytes(stdin.read(n), 'utf8'))
-        elif fn == Fn.OUT:
-            stdout.write(memr(regfile[r_a] + imm, regfile[r_b]).decode('unicode_escape'))
+        io(fn, regfile[r_a], regfile[r_b], imm)
     elif op == Op.ALUR:
         regfile[r_a] = alu(fn, regfile[r_b], regfile[r_c])
     elif op == Op.ALUI:
         regfile[r_a] = alu(fn, regfile[r_b], imm)
+    elif op == Op.MD:
+        regfile[r_a] = muldiv(fn, regfile[r_b], regfile[r_c])
     elif op == Op.JUMP:
         regfile[r_a] = regfile[pc]
         newpc = regfile[r_b] + imm
