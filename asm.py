@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from sys import stderr, argv
-from cpu import Op, Fn, regnames
+from cpu import Op, Fn, regnames, scont
 from re import compile as recomp
 
 def progdump(prog):
@@ -72,14 +72,16 @@ reg = '(pc|r[0-9][0-9]*)'
 ctl = '(halt|nop)'
 io = '(in|out|outd|outb|outh|outc)'
 alu = '(add|sub|and|or|xor|ls|rs)'
-md = '(mul|div)'
+md = '(mul|div|mod)'
 jump = '(j|jal)'
 branch = '(beq|bne|blt|bge)'
 load = '(l[whb])'
 store = '(s[whb])'
 
-optab = [(ctl, Op.CTL), (lit, None),
+optab = [("(halt|nop)", Op.CTL), (f"(sleep) {reg}", Op.CTL), (f"(sleep) {num}", Op.CTL),
+        (lit, None),
         (f"{io} {reg}", Op.IO), (f"{io} {num}", Op.IO),
+        (f"(clear)", Op.IO),
         (f"(in|out) {reg} {reg}", Op.IO),
         (f"{alu} {reg} {reg} {reg}", Op.ALUR), (f"{alu} {reg} {reg} {num}", Op.ALUI),
         (f"{md} {reg} {reg} {reg}", Op.MD),
@@ -93,18 +95,16 @@ optab = [(ctl, Op.CTL), (lit, None),
 
 optab = [(recomp(t[0]), t[1]) for t in optab]
 
-fntab = {'halt': Fn.HALT, 'nop': Fn.NOP,
+fntab = {'halt': Fn.HALT, 'nop': Fn.NOP, 'sleep': Fn.SLEEP,
         'in': Fn.IN, 'out': Fn.OUT, 'outd': Fn.OUTD, 'outb': Fn.OUTB, 'outh': Fn.OUTH, 'outc': Fn.OUTC,
+        'clear': Fn.CL,
         'add': Fn.ADD, 'sub': Fn.SUB, 'and': Fn.AND, 'or': Fn.OR, 'xor': Fn.XOR, 'ls': Fn.LS, 'rs': Fn.RS,
-        'mul': Fn.MUL, 'div': Fn.DIV,
+        'mul': Fn.MUL, 'div': Fn.DIV, 'mod': Fn.MOD,
         'j': Fn.J, 'jal': Fn.JAL,
         'beq': Fn.EQ, 'bne': Fn.NE, 'blt': Fn.LT, 'bge': Fn.GE,
         'lw': Fn.LW, 'lh': Fn.LH, 'lb': Fn.LB, 'sw': Fn.SW, 'sh': Fn.SH, 'sb': Fn.SB}
 
 regtab = {r: i for i,r in enumerate(regnames)}
-
-def scont(x, l): # sign contract
-    return x & ((1 << l) - 1)
 
 prog = b''
 for _,l in enumerate(code):

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 from sys import argv, stderr, stdin, stdout
+from time import sleep
+from os import system
 from struct import pack, unpack
 from enum import Enum
 
@@ -18,6 +20,7 @@ class Fn(Enum):
     # CTL
     HALT        = 0b000
     NOP         = 0b001
+    SLEEP       = 0b010
 
     # IO
     IN          = 0b000
@@ -26,6 +29,7 @@ class Fn(Enum):
     OUTB        = 0b011 # output reg or imm as binary number
     OUTH        = 0b100 # output reg or imm as hex number
     OUTC        = 0b101 # output reg or imm as character
+    CL          = 0b110 # clear output
 
     # ALUR and ALUI
     ADD         = 0b000
@@ -39,6 +43,7 @@ class Fn(Enum):
     # MD
     MUL         = 0b000
     DIV         = 0b001
+    MOD         = 0b010
 
     # JUMP
     J           = 0b000
@@ -82,6 +87,18 @@ def memw(addr, data): # must pack data
         raise Exception(f"memory address {hex(addr)} out of bounds")
     memory = memory[:addr] + data + memory[addr+l:]
 
+def gf(i, s, e): # get field of inst between s and e
+    return (i >> e) & ((1 << (s - e + 1)) - 1)
+
+def scont(x, l): # sign contract
+    return x & ((1 << l) - 1)
+
+def sext(x, l): # sign extend
+    if x >> (l - 1) == 1:
+        return -((1 << l) - x)
+    else:
+        return x
+
 class Regfile:
     def __init__(self):
         self.regs = [0] * 33
@@ -117,13 +134,16 @@ def io(fn, x, y, z):
     elif fn == Fn.OUT:
         stdout.write(memr(x + z, y).decode('unicode_escape'))
     elif fn == Fn.OUTD:
-        stdout.write('{:d}'.format(x + z))
+        stdout.write('{:d}'.format(sext(x + z, 32))) # keep sign
     elif fn == Fn.OUTB:
-        stdout.write('0b{:032b}'.format(x + z))
+        stdout.write('0b{:032b}'.format(scont(x + z, 32)))
     elif fn == Fn.OUTH:
-        stdout.write('0x{:08h}'.format(x + z))
-    else:
+        stdout.write('0x{:08x}'.format(scont(x + z, 32)))
+    elif fn == Fn.OUTC:
         stdout.write(chr(x + z))
+    else:
+        system('clear')
+
 
 def alu(fn, x, y):
     if fn == Fn.ADD:
@@ -146,6 +166,8 @@ def muldiv(fn, x, y):
         return x * y
     elif fn == Fn.DIV:
         return x // y
+    elif fn == Fn.MOD:
+        return x % y
 
 def cond(fn, x, y):
     ret = False
@@ -158,15 +180,6 @@ def cond(fn, x, y):
     elif fn == Fn.GE:
         ret = x >= y
     return ret
-
-def gf(i, s, e): # get field of inst between s and e
-    return (i >> e) & ((1 << (s - e + 1)) - 1)
-
-def sext(x, l): # sign extend
-    if x >> (l - 1) == 1:
-        return -((1 << l) - x)
-    else:
-        return x
 
 def step():
     # fetch
@@ -186,7 +199,10 @@ def step():
     if op == Op.CTL:
         if fn == Fn.HALT:
             return False
-        newpc += 1
+        elif fn == Fn.NOP:
+            newpc += 1
+        else:
+            sleep(regfile[r_a] + imm)
     elif op == Op.IO:
         io(fn, regfile[r_a], regfile[r_b], imm)
     elif op == Op.ALUR:
