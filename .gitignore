@@ -1,6 +1,6 @@
-*test*
 a.out
 *.vim
+old/
 tags
 weekcore.md
 __pycache__
